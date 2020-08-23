@@ -1,0 +1,385 @@
+import "@babylonjs/core/Debug/debugLayer";
+import "@babylonjs/inspector";
+import { OBJFileLoader } from "@babylonjs/loaders/OBJ";
+import { Engine, Scene, ArcRotateCamera, Vector3, HemisphericLight, Mesh, MeshBuilder, FreeCamera, Color4, StandardMaterial, Color3, PointLight, ShadowGenerator, Quaternion, Matrix, SceneLoader, InputBlock } from "@babylonjs/core";
+import { AdvancedDynamicTexture, Button, Control, Image, Rectangle, InputText } from "@babylonjs/gui";
+import { Environment } from "./environment";
+import { Player, EnemyMgr } from "./playerController";
+import { PlayerInput } from "./inputController";
+import { Web } from "./web";
+
+enum State { START = 0, GAME = 1, LOSE = 2, CUTSCENE = 3 }
+
+class App {
+    // General Entire Application
+    private _scene: Scene;
+    private _canvas: HTMLCanvasElement;
+    private _engine: Engine;
+
+    //Game State Related
+    public assets!: { mesh: Mesh; };
+    private _input!: PlayerInput;
+    private _environment!: Environment;
+    private _player!: Player;
+    private _eMgr!: EnemyMgr;
+
+
+    //Scene - related
+    private _state: number = 2;
+    private _gamescene!: Scene;
+    private _cutScene!: Scene;
+
+    //Web
+    private _web!: Web;
+
+    constructor() {
+        this._canvas = this._createCanvas();
+
+        // initialize babylon scene and engine
+        this._engine = new Engine(this._canvas, true);
+        this._scene = new Scene(this._engine);
+
+        // init web
+        this._web = new Web();
+
+        // hide/show the Inspector
+        window.addEventListener("keydown", (ev) => {
+            // Shift+Ctrl+Alt+I
+            if (ev.shiftKey && ev.ctrlKey && ev.altKey && ev.keyCode === 73) {
+                if (this._scene.debugLayer.isVisible()) {
+                    this._scene.debugLayer.hide();
+                } else {
+                    this._scene.debugLayer.show();
+                }
+            }
+        });
+
+        // run the main render loop
+        this._main();
+    }
+
+    private _createCanvas(): HTMLCanvasElement {
+
+        //Commented out for development
+        document.documentElement.style["overflow"] = "hidden";
+        document.documentElement.style.overflow = "hidden";
+        document.documentElement.style.width = "100%";
+        document.documentElement.style.height = "100%";
+        document.documentElement.style.margin = "0";
+        document.documentElement.style.padding = "0";
+        document.body.style.overflow = "hidden";
+        document.body.style.width = "100%";
+        document.body.style.height = "100%";
+        document.body.style.margin = "0";
+        document.body.style.padding = "0";
+
+        //create the canvas html element and attach it to the webpage
+        this._canvas = document.createElement("canvas");
+        this._canvas.style.width = "100%";
+        this._canvas.style.height = "100%";
+        this._canvas.id = "gameCanvas";
+        document.body.appendChild(this._canvas);
+
+        return this._canvas;
+    }
+
+    private async _main(): Promise<void> {
+        await this._goToStart();
+
+        // Register a render loop to repeatedly render the scene
+        this._engine.runRenderLoop(() => {
+            switch (this._state) {
+                case State.START:
+                    this._scene.render();
+                    break;
+                case State.CUTSCENE:
+                    this._scene.render();
+                    break;
+                case State.GAME:
+                    this._scene.render();
+                    break;
+                case State.LOSE:
+                    this._scene.render();
+                    break;
+                default: break;
+            }
+        });
+
+        //resize if the screen is resized/rotated
+        window.addEventListener('resize', () => {
+            this._engine.resize();
+        });
+    }
+    private async _goToStart() {
+        this._engine.displayLoadingUI();
+
+        this._scene.detachControl();
+        let scene = new Scene(this._engine);
+        scene.clearColor = new Color4(137 / 255, 124 / 255, 108 / 255, 0.8);
+        let camera = new FreeCamera("camera1", new Vector3(0, 0, 0), scene);
+        camera.setTarget(Vector3.Zero());
+
+        //create a fullscreen ui for all of our GUI elements
+        const guiMenu = AdvancedDynamicTexture.CreateFullscreenUI("UI");
+        guiMenu.idealHeight = 720; //fit our fullscreen ui to this height
+
+        const imageRect = new Rectangle("titleContainer");
+        imageRect.width = 0.8;
+        imageRect.thickness = 0;
+        guiMenu.addControl(imageRect);
+
+        const startbg = new Image("startbg", "images/logo.png");
+        startbg.top = "-100px";
+        startbg.autoScale = true;
+        imageRect.addControl(startbg);
+
+        const buttonRect = new Rectangle("buttonContainer");
+        buttonRect.width = 0.8;
+        buttonRect.thickness = 0;
+        guiMenu.addControl(buttonRect);
+
+        //create a simple button
+        const startBtn = Button.CreateSimpleButton("start", "PLAY");
+        startBtn.width = 0.3;
+        startBtn.height = "40px";
+        startBtn.color = "white";
+        startBtn.top = "-200px";
+        startBtn.thickness = 1;
+        startBtn.verticalAlignment = Control.VERTICAL_ALIGNMENT_BOTTOM;
+        buttonRect.addControl(startBtn);
+
+        const title = new InputText("name", "yorha");
+        title.width = 0.3;
+        title.height = "40px";
+        title.color = "white";
+        title.top = "-250px";
+        title.focusedBackground = startBtn.background;
+        title.background = startBtn.background;
+        title.verticalAlignment = Control.VERTICAL_ALIGNMENT_BOTTOM;
+        buttonRect.addControl(title);
+
+        const changeBtn = Button.CreateImageOnlyButton("refresh", "images/refresh.png");
+        changeBtn.image!.scaleX = 0.5;
+        changeBtn.image!.scaleY = 0.5;
+        changeBtn.width = "40px";
+        changeBtn.height = "40px";
+        changeBtn.color = "white";
+        changeBtn.left = "12%";
+        changeBtn.top = "-250px";
+        changeBtn.thickness = 0;
+        changeBtn.verticalAlignment = Control.VERTICAL_ALIGNMENT_BOTTOM;
+        buttonRect.addControl(changeBtn);
+
+        //this handles interactions with the start button attached to the scene
+        startBtn.onPointerDownObservable.add(() => {
+            this._goToCutScene();
+            scene.detachControl(); //observables disabled
+        });
+
+        //--SCENE FINISHED LOADING--
+        await scene.whenReadyAsync();
+        this._engine.hideLoadingUI();
+        //lastly set the current state to the start state and set the scene to the start scene
+        this._scene.dispose();
+        this._scene = scene;
+        this._state = State.START;
+    }
+
+    private async _goToCutScene(): Promise<void> {
+        this._engine.displayLoadingUI();
+        await this._web.InitWS();
+
+        //--SETUP SCENE--
+        //dont detect any inputs from this ui while the game is loading
+        this._scene.detachControl();
+        this._cutScene = new Scene(this._engine);
+        let camera = new FreeCamera("camera1", new Vector3(0, 0, 0), this._cutScene);
+        camera.setTarget(Vector3.Zero());
+        this._cutScene.clearColor = new Color4(0, 0, 0, 1);
+
+        //--GUI--
+        const cutScene = AdvancedDynamicTexture.CreateFullscreenUI("cutscene");
+
+        //--PROGRESS DIALOGUE--
+        const next = Button.CreateSimpleButton("next", "NEXT");
+        next.color = "white";
+        next.thickness = 0;
+        next.verticalAlignment = Control.VERTICAL_ALIGNMENT_BOTTOM;
+        next.horizontalAlignment = Control.HORIZONTAL_ALIGNMENT_RIGHT;
+        next.width = "64px";
+        next.height = "64px";
+        next.top = "-3%";
+        next.left = "-12%";
+        cutScene.addControl(next);
+
+        next.onPointerUpObservable.add(() => {
+            this._goToGame();
+        })
+
+        //--WHEN SCENE IS FINISHED LOADING--
+        await this._cutScene.whenReadyAsync();
+        this._engine.hideLoadingUI();
+        this._scene.dispose();
+        this._state = State.CUTSCENE;
+        this._scene = this._cutScene;
+
+        //--START LOADING AND SETTING UP THE GAME DURING THIS SCENE--
+        var finishedLoading = false;
+        await this._setUpGame().then(res => {
+            finishedLoading = true;
+        });
+    }
+
+    private async _setUpGame() {
+        let scene = new Scene(this._engine);
+        this._gamescene = scene;
+
+        //--CREATE ENVIRONMENT--
+        const environment = new Environment(scene);
+        this._environment = environment;
+        await this._environment.load(); //environment
+        await this._loadCharacterAssets(scene);
+    }
+
+    private async _loadCharacterAssets(scene: Scene) {
+
+        async function loadCharacter() {
+
+            //collision mesh
+            const outer = MeshBuilder.CreateBox("outer", { width: 2, depth: 1, height: 3 }, scene);
+            outer.isVisible = false;
+            outer.isPickable = false;
+            outer.checkCollisions = true;
+
+            //move origin of box collider to the bottom of the mesh (to match player mesh)
+            outer.bakeTransformIntoVertices(Matrix.Translation(0, 1.5, 0))
+            //for collisions
+            outer.ellipsoid = new Vector3(1, 1.5, 1);
+            outer.ellipsoidOffset = new Vector3(0, 1.5, 0);
+
+            outer.rotationQuaternion = new Quaternion(0, 1, 0, 0); // rotate the player mesh 180 since we want to see the back of the player
+
+            //--IMPORTING MESH--
+            return SceneLoader.ImportMeshAsync(null, "./models/", "nier.obj", scene).then((result) => {
+                const root = result.meshes[0];
+                result.meshes.forEach(element => {
+                    element.parent = outer
+                    element.isPickable = false;
+                    element.getChildMeshes().forEach(m => {
+                        m.isPickable = false;
+                    })
+                });
+
+                //return the mesh and animations
+                return {
+                    mesh: outer as Mesh,
+                    animationGroups: result.animationGroups
+                }
+            });
+        }
+
+        return loadCharacter().then(assets => {
+            this.assets = assets;
+        })
+
+    }
+
+    private async _initializeGameAsync(scene: Scene): Promise<void> {
+        //temporary light to light the entire scene
+        var light0 = new HemisphericLight("HemiLight", new Vector3(0, 1, 0), scene);
+
+        const light = new PointLight("sparklight", new Vector3(0, 0, 0), scene);
+        light.diffuse = new Color3(0.08627450980392157, 0.10980392156862745, 0.15294117647058825);
+        light.intensity = 35;
+        light.radius = 0.5;
+
+        const shadowGenerator = new ShadowGenerator(1024, light);
+        shadowGenerator.darkness = 0.4;
+
+        //Create the player
+        this._player = new Player(this.assets, scene, shadowGenerator, this._input);
+        const camera = this._player.activatePlayerCamera();
+
+        this._eMgr = new EnemyMgr(this.assets, this._scene, shadowGenerator);
+    }
+
+    private async _goToGame() {
+        //--SETUP SCENE--
+        this._scene.detachControl();
+        let scene = this._gamescene;
+        scene.clearColor = new Color4(0.01568627450980392, 0.01568627450980392, 0.20392156862745098); // a color that fit the overall color scheme better
+
+        //--GUI--
+        const playerUI = AdvancedDynamicTexture.CreateFullscreenUI("UI");
+        //dont detect any inputs from this ui while the game is loading
+        scene.detachControl();
+
+        //create a simple button
+        const loseBtn = Button.CreateSimpleButton("lose", "LOSE");
+        loseBtn.width = 0.2
+        loseBtn.height = "40px";
+        loseBtn.color = "white";
+        loseBtn.top = "-14px";
+        loseBtn.thickness = 0;
+        loseBtn.verticalAlignment = Control.VERTICAL_ALIGNMENT_BOTTOM;
+        playerUI.addControl(loseBtn);
+
+        //this handles interactions with the start button attached to the scene
+        loseBtn.onPointerDownObservable.add(() => {
+            this._goToLose();
+            scene.detachControl(); //observables disabled
+        });
+
+        //--INPUT--
+        this._input = new PlayerInput(scene); //detect keyboard/mobile inputs
+
+        //primitive character and setting
+        await this._initializeGameAsync(scene);
+
+        // init manager of player
+        this._web.UpdateP(this._eMgr, this._player);
+
+        //--WHEN SCENE FINISHED LOADING--
+        await scene.whenReadyAsync();
+        scene.getMeshByName("outer")!.position = new Vector3(0, 3, 0);
+        //get rid of start scene, switch to gamescene and change states
+        this._scene.dispose();
+        this._state = State.GAME;
+        this._scene = scene;
+        this._engine.hideLoadingUI();
+        //the game is ready, attach control back
+        this._scene.attachControl();
+    }
+
+    private async _goToLose(): Promise<void> {
+        this._engine.displayLoadingUI();
+
+        //--SCENE SETUP--
+        this._scene.detachControl();
+        let scene = new Scene(this._engine);
+        scene.clearColor = new Color4(0, 0, 0, 1);
+        let camera = new FreeCamera("camera1", new Vector3(0, 0, 0), scene);
+        camera.setTarget(Vector3.Zero());
+
+        //--GUI--
+        const guiMenu = AdvancedDynamicTexture.CreateFullscreenUI("UI");
+        const mainBtn = Button.CreateSimpleButton("mainmenu", "MAIN MENU");
+        mainBtn.width = 0.2;
+        mainBtn.height = "40px";
+        mainBtn.color = "white";
+        guiMenu.addControl(mainBtn);
+        //this handles interactions with the start button attached to the scene
+        mainBtn.onPointerUpObservable.add(() => {
+            this._goToStart();
+        });
+
+        //--SCENE FINISHED LOADING--
+        await scene.whenReadyAsync();
+        this._engine.hideLoadingUI(); //when the scene is ready, hide loading
+        //lastly set the current state to the lose state and set the scene to the lose scene
+        this._scene.dispose();
+        this._scene = scene;
+        this._state = State.LOSE;
+    }
+}
+new App();
