@@ -8,7 +8,7 @@ export class Environment {
     }
 
     public async load() {
-        var ground = Mesh.CreateBox("ground", 24, this._scene);
+        var ground = Mesh.CreateBox("ground", 5, this._scene);
         ground.scaling = new Vector3(10, .02, 10);
 
         var groundMaterial = new StandardMaterial('groundMat', this._scene);
@@ -16,5 +16,6 @@ export class Environment {
         groundMaterial.specularColor = Color3.Black(); // matte
 
         ground.material = groundMaterial;
+
     }
 }

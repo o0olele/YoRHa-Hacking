@@ -2,11 +2,12 @@ import "@babylonjs/core/Debug/debugLayer";
 import "@babylonjs/inspector";
 import { OBJFileLoader } from "@babylonjs/loaders/OBJ";
 import { Engine, Scene, ArcRotateCamera, Vector3, HemisphericLight, Mesh, MeshBuilder, FreeCamera, Color4, StandardMaterial, Color3, PointLight, ShadowGenerator, Quaternion, Matrix, SceneLoader, InputBlock } from "@babylonjs/core";
-import { AdvancedDynamicTexture, Button, Control, Image, Rectangle, InputText } from "@babylonjs/gui";
+import { AdvancedDynamicTexture, Button, Control, Image, Rectangle, InputText, TextBlock } from "@babylonjs/gui";
 import { Environment } from "./environment";
 import { Player, EnemyMgr } from "./playerController";
 import { PlayerInput } from "./inputController";
 import { Web } from "./web";
+import { Hud } from "./ui";
 
 enum State { START = 0, GAME = 1, LOSE = 2, CUTSCENE = 3 }
 
@@ -23,11 +24,13 @@ class App {
     private _player!: Player;
     private _eMgr!: EnemyMgr;
 
-
     //Scene - related
     private _state: number = 2;
     private _gamescene!: Scene;
     private _cutScene!: Scene;
+
+    //GameUI - related
+    private _ui!: Hud;
 
     //Web
     private _web!: Web;
@@ -97,6 +100,8 @@ class App {
                     break;
                 case State.GAME:
                     this._scene.render();
+                    if (this._web.IsGameEnd())
+                        this._goToLose();
                     break;
                 case State.LOSE:
                     this._scene.render();
@@ -110,6 +115,7 @@ class App {
             this._engine.resize();
         });
     }
+
     private async _goToStart() {
         this._engine.displayLoadingUI();
 
@@ -290,8 +296,8 @@ class App {
 
         const light = new PointLight("sparklight", new Vector3(0, 0, 0), scene);
         light.diffuse = new Color3(0.08627450980392157, 0.10980392156862745, 0.15294117647058825);
-        light.intensity = 35;
-        light.radius = 0.5;
+        light.intensity = 10;
+        light.radius = 0.1;
 
         const shadowGenerator = new ShadowGenerator(1024, light);
         shadowGenerator.darkness = 0.4;
@@ -301,6 +307,10 @@ class App {
         const camera = this._player.activatePlayerCamera();
 
         this._eMgr = new EnemyMgr(this.assets, this._scene, shadowGenerator);
+
+        scene.registerBeforeRender(()=>{
+            this._ui.UpdateLeftTime(this._web.GetLeftTime());
+        });
     }
 
     private async _goToGame() {
@@ -310,25 +320,9 @@ class App {
         scene.clearColor = new Color4(0.01568627450980392, 0.01568627450980392, 0.20392156862745098); // a color that fit the overall color scheme better
 
         //--GUI--
-        const playerUI = AdvancedDynamicTexture.CreateFullscreenUI("UI");
-        //dont detect any inputs from this ui while the game is loading
+        const ui = new Hud(scene);
+        this._ui = ui;
         scene.detachControl();
-
-        //create a simple button
-        const loseBtn = Button.CreateSimpleButton("lose", "LOSE");
-        loseBtn.width = 0.2
-        loseBtn.height = "40px";
-        loseBtn.color = "white";
-        loseBtn.top = "-14px";
-        loseBtn.thickness = 0;
-        loseBtn.verticalAlignment = Control.VERTICAL_ALIGNMENT_BOTTOM;
-        playerUI.addControl(loseBtn);
-
-        //this handles interactions with the start button attached to the scene
-        loseBtn.onPointerDownObservable.add(() => {
-            this._goToLose();
-            scene.detachControl(); //observables disabled
-        });
 
         //--INPUT--
         this._input = new PlayerInput(scene); //detect keyboard/mobile inputs
@@ -368,9 +362,19 @@ class App {
         mainBtn.height = "40px";
         mainBtn.color = "white";
         guiMenu.addControl(mainBtn);
+
+        const overText = new TextBlock("gameover", "Game Over");
+        overText.width = 0.5;
+        overText.fontSize = "48px";
+        overText.color = "white";
+        overText.height = "64px";
+        overText.top = "-120px";
+        overText.verticalAlignment = Control.VERTICAL_ALIGNMENT_CENTER;
+        guiMenu.addControl(overText);
         //this handles interactions with the start button attached to the scene
         mainBtn.onPointerUpObservable.add(() => {
             this._goToStart();
+            this._web.CloseWS();
         });
 
         //--SCENE FINISHED LOADING--
@@ -381,5 +385,6 @@ class App {
         this._scene = scene;
         this._state = State.LOSE;
     }
+
 }
 new App();

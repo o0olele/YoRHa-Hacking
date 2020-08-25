@@ -1,4 +1,4 @@
-import { TransformNode, ShadowGenerator, Scene, Mesh, UniversalCamera, ArcRotateCamera, Vector3, Quaternion, Ray, Scalar } from "@babylonjs/core";
+import { TransformNode, ShadowGenerator, Scene, Mesh, UniversalCamera, ArcRotateCamera, Vector3, Quaternion, Ray, Scalar, StandardMaterial, Color3, MeshBuilder, Matrix, PointLight } from "@babylonjs/core";
 import { PlayerInput } from "./inputController";
 
 export class Player extends TransformNode {
@@ -10,7 +10,10 @@ export class Player extends TransformNode {
     public mesh: Mesh; //outer collisionbox of player
     private _direct!: number;
     private _pos!: Vector3;
+    private _shotDirect!: number;
     private _hp!: number;
+
+    private _lastLookat: Vector3 = new Vector3(0, 0, 0);
 
     //Camera
     private _camRoot!: TransformNode;
@@ -23,12 +26,8 @@ export class Player extends TransformNode {
     private static readonly ORIGINAL_TILT: Vector3 = new Vector3(0.5934119456780721, 0, 0);
 
     //player movement vars
-    private _deltaTime: number = 0;
     private _h!: number;
     private _v!: number;
-
-    private _moveDirection: Vector3 = new Vector3();
-    private _inputAmt!: number;
 
     //gravity, ground detection, jumping
     private _gravity: Vector3 = new Vector3();
@@ -76,50 +75,36 @@ export class Player extends TransformNode {
 
     }
 
+    public getShotDirect(): number {
+        return this._shotDirect;
+    }
+
     public isMove(): boolean {
         return this._input?.horizontalAxis != 0 || this._input.verticalAxis != 0;
     }
 
-    private _updateFromControls(): void {
-        this._deltaTime = this.scene.getEngine().getDeltaTime() / 1000.0;
+    public isShot(): boolean {
+        return this._input!.isShot;
+    }
 
-        this._moveDirection = Vector3.Zero(); // vector that holds movement information
+    private _updateFromControls(): void {
         this._h = this._input!.horizontal; //x-axis x
         this._v = this._input!.vertical; //z-axis y
         this._direct = this._caculateAngle(-this._h, -this._v);
-        console.log(this._direct);
-
-        //--MOVEMENTS BASED ON CAMERA (as it rotates)--
-        let fwd = this._camRoot.forward;
-        let right = this._camRoot.right;
-        let correctedVertical = fwd.scaleInPlace(this._v);
-        let correctedHorizontal = right.scaleInPlace(this._h);
-
-        //movement based off of camera's view
-        let move = correctedHorizontal.addInPlace(correctedVertical);
-
-        //clear y so that the character doesnt fly up, normalize for next step
-        this._moveDirection = new Vector3((move).normalize().x, 0, (move).normalize().z);
-
-        //clamp the input value so that diagonal movement isn't twice as fast
-        let inputMag = Math.abs(this._h) + Math.abs(this._v);
-        if (inputMag < 0) {
-            this._inputAmt = 0;
-        } else if (inputMag > 1) {
-            this._inputAmt = 1;
-        } else {
-            this._inputAmt = inputMag;
-        }
-
-        //final movement that takes into consideration the inputs
-        this._moveDirection = this._moveDirection.scaleInPlace(this._inputAmt * Player.PLAYER_SPEED);
 
         //Rotations
         let temp = new Vector3();
         temp.x = 2 * this.mesh!.position!.x - this._input!.groundPos!.x;
         temp.z = 2 * this.mesh!.position!.z - this._input!.groundPos!.z;
         temp.y = this.mesh!.position!.y;
-        this.mesh.lookAt(temp, Math.PI);
+        this.mesh.lookAt(new Vector3(
+            Scalar.Lerp(this._lastLookat.x, temp.x, 0.1),
+            temp.y,
+            Scalar.Lerp(this._lastLookat.z, temp.z, 0.1)
+        ), Math.PI);
+        this._lastLookat = temp;
+
+        this._shotDirect = this._caculateAngle(this._input!.groundPos!.x - this.mesh!.position!.x, this._input!.groundPos!.z - this.mesh!.position!.z);
     }
 
     private _floorRaycast(offsetx: number, offsetz: number, raycastlen: number): Vector3 {
@@ -147,21 +132,19 @@ export class Player extends TransformNode {
     }
 
     private _updateGroundDetection(): void {
-        if (!this._isGrounded()) {
+        /*if (!this._isGrounded()) {
             this._gravity = this._gravity.addInPlace(Vector3.Up().scale(this._deltaTime * Player.GRAVITY));
             this._grounded = false;
         }
         //limit the speed of gravity to the negative of the jump power
         if (this._gravity.y < -Player.JUMP_FORCE) {
             this._gravity.y = -Player.JUMP_FORCE;
-        }
+        }*/
         this.mesh.position = new Vector3(
-            Scalar.Lerp(this.mesh.position.x,this._pos.x,0.02),
-            this.mesh.position.y,
-            Scalar.Lerp(this.mesh.position.z,this._pos.z,0.02),
+            Scalar.Lerp(this.mesh.position.x, this._pos.x, 0.1),
+            0,//this.mesh.position.y,
+            Scalar.Lerp(this.mesh.position.z, this._pos.z, 0.1),
         );
-        //this.mesh.moveWithCollisions(new Vector3(this._pos.x - this.mesh.position.x, 0, this._pos.z - this.mesh.position.z));
-        //this.mesh.moveWithCollisions(this._moveDirection.addInPlace(this._gravity));
 
         if (this._isGrounded()) {
             this._gravity.y = 0;
@@ -194,7 +177,7 @@ export class Player extends TransformNode {
     }
 
     private _updateCamera(): void {
-        let centerPlayer = this.mesh.position.y + 2;
+        let centerPlayer = this.mesh.position.y + 10;
         this._camRoot.position = Vector3.Lerp(this._camRoot.position, new Vector3(this.mesh.position.x, centerPlayer, this.mesh.position.z), 0.4);
     }
 
@@ -213,7 +196,7 @@ export class Player extends TransformNode {
         yTilt.parent = this._camRoot;
 
         //our actual camera that's pointing at our root's position
-        this.camera = new UniversalCamera("cam", new Vector3(0, 0, -30), this.scene);
+        this.camera = new UniversalCamera("cam", new Vector3(0, 0, -100), this.scene);
         this.camera.lockedTarget = this._camRoot.position;
         this.camera.fov = 0.47350045992678597;
         this.camera.parent = yTilt;
@@ -225,20 +208,22 @@ export class Player extends TransformNode {
 
 export class EnemyMgr {
     public eMap!: Map<number, Enemy>;
+    public bMap!: Map<number, Bullet>;
     public assets: { mesh: any; };
     public scene: Scene;
     public show: ShadowGenerator;
 
     constructor(assets: { mesh: any; }, sc: Scene, shadowGenerator: ShadowGenerator) {
         this.eMap = new Map<number, Enemy>();
+        this.bMap = new Map<number, Bullet>()
         this.assets = assets;
         this.scene = sc;
         this.show = shadowGenerator;
     }
 
-    public Add(e: number, x: number, y: number, hp: number) {
+    public Add(e: number, x: number, y: number, hp: number, direct: number) {
         if (this.eMap.has(e)) {
-            this.eMap.get(e)?.Update(x, y, hp);
+            this.eMap.get(e)?.Update(x, y, hp, direct);
         } else {
             let temp = new Enemy(e, this.assets, this.scene, this.show);
             this.eMap.set(e, temp);
@@ -251,17 +236,83 @@ export class EnemyMgr {
             this.eMap.delete(e);
         }
     }
+
+    public AddBullet(e: number, x: number, y: number) {
+        if (this.bMap.has(e)) {
+            this.bMap.get(e)?.Update(x, y);
+        } else {
+            let temp = new Bullet(e, this.scene, this.show);
+            this.bMap.set(e, temp);
+        }
+    }
+
+    public DelBullet(e: number) {
+        if (this.bMap.has(e)) {
+            this.bMap.get(e)?.Destroy();
+            this.bMap.delete(e);
+        }
+    }
+
+    public DelLastBullets(list: number[]) {
+        let iterator = this.bMap.keys();
+        let r: IteratorResult<number>;
+        while (r = iterator.next(), !r.done) {
+            if (typeof (list) == null || list.length == 0) {
+                this.DelBullet(r.value);
+                continue;
+            }
+            if (list.indexOf(r.value) < 0)
+                this.DelBullet(r.value);
+        }
+    }
+}
+
+export class Bullet extends TransformNode {
+    public scene: Scene;
+    public bid!: number;
+    public mesh!: Mesh;
+    public pos!: Vector3;
+
+    constructor(id: number, scene: Scene, shadowGenerator: ShadowGenerator) {
+        super("bullet" + id, scene);
+
+        this.bid = id;
+        this.scene = scene;
+
+        this.mesh = Mesh.CreateSphere("bb" + id, 12, 0.8);
+        this.mesh.parent = this;
+
+        shadowGenerator.addShadowCaster(this.mesh); //the player mesh will cast shadows
+
+        this.scene.registerBeforeRender(() => {
+            this.position = this.pos;
+        });
+        this.mesh.isVisible = false;
+        this.pos = this.mesh.position;
+    }
+
+    public Destroy() {
+        this.scene.removeMesh(this.mesh, true);
+        this.mesh.dispose();
+    }
+
+    public Update(x: number, y: number) {
+        this.mesh.isVisible = true;
+        this.pos.x = x;
+        this.pos.y = 0;
+        this.pos.z = y;
+    }
 }
 
 export class Enemy extends TransformNode {
     public scene: Scene;
 
-    //Player
     public pid!: number;
     public mesh: Mesh; //outer collisionbox of player
-    public pos!: Vector3;
+    public pos: Vector3 = new Vector3(0, 0, 0);
     public hp!: number;
-
+    public direct!: number;
+    public quar!: Quaternion;
 
     constructor(id: number, assets: { mesh: any; }, scene: Scene, shadowGenerator: ShadowGenerator) {
         super("player" + id, scene);
@@ -273,22 +324,26 @@ export class Enemy extends TransformNode {
 
         shadowGenerator.addShadowCaster(assets.mesh); //the player mesh will cast shadows
 
-        this.scene.registerBeforeRender(() => {
-
-            this.position = this.pos;
-
-        });
-
         this.pos = this.mesh.position;
     }
 
     public Destroy() {
+        this.mesh.dispose();
         this.scene.removeMesh(this.mesh, true);
     }
 
-    public Update(x: number, y: number, hp: number) {
-        this.pos.x = x;
-        this.pos.z = y;
+    public Update(x: number, z: number, hp: number, direct: number) {
+        this.pos.x = Scalar.Lerp(this.pos.x, x, 0.2);
+        this.pos.y = 0;
+        this.pos.z = Scalar.Lerp(this.pos.z, z, 0.2);
         this.hp = hp;
+        this.direct = direct;
+
+        this.mesh.lookAt(new Vector3(
+            this.pos.x + 10 * Math.sin(this.direct * Math.PI / 180),
+            0,
+            this.pos.z + 10 * Math.cos(this.direct * Math.PI / 180)
+        ), Math.PI, Math.PI, Math.PI);
+
     }
 }
