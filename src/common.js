@@ -4,13 +4,11 @@
 
 function blob2string(blob) {
     var uint8_msg = new Uint8Array(blob);
-
     var msgString = String.fromCharCode.apply(null, uint8_msg);
-    //console.log(msgString);
     return msgString;
 }
 
-function TokenMsg(id) {
+function TokenMsg(id, token) {
     var h = concatenate(Uint8Array, getUint8Bytes(0), getUint8Bytes(0), getUint8Bytes(1), getUint8Bytes(0));
     h.reverse()
     var head = concatenate(Uint8Array, getUint16Bytes(0), getUint16Bytes(8));
@@ -18,19 +16,28 @@ function TokenMsg(id) {
     var value = getUint32Bytes(id);
     value.reverse();
 
-    var packet = concatenate(Uint8Array, h, head, value);
+    var result = [];
+    for (var i = 0; i < token.length; i += 1) {
+        result.push(token.substr(i, 1).charCodeAt(0));
+    }
+    var _token = new Uint8Array(result);
+
+    var packet = concatenate(Uint8Array, h, head, value, _token);
     return packet;
 }
+
 
 function MoveMsg(direct) {
     var h = concatenate(Uint8Array, getUint8Bytes(0), getUint8Bytes(0), getUint8Bytes(1), getUint8Bytes(0));
     h.reverse()
     var head = concatenate(Uint8Array, getUint16Bytes(1), getUint16Bytes(8));
     head.reverse();
-    var valued = getUint32Bytes(direct);
-    valued.reverse();
+    var angle = getUint32Bytes(direct);
+    angle.reverse();
+    var power = getUint32Bytes(1);
+    power.reverse();
 
-    return concatenate(Uint8Array, h, head, valued);
+    return concatenate(Uint8Array, h, head, angle, power);
 }
 
 function ShotMsg(direct) {
@@ -57,10 +64,10 @@ function DirectMsg(direct) {
     h.reverse()
     var head = concatenate(Uint8Array, getUint16Bytes(5), getUint16Bytes(8));
     head.reverse();
-    var valued = getUint32Bytes(direct);
-    valued.reverse();
+    var angle = getUint32Bytes(direct);
+    angle.reverse();
 
-    return concatenate(Uint8Array, h, head, valued);
+    return concatenate(Uint8Array, h, head, angle);
 }
 
 function concatenate(resultConstructor, ...arrays) {

@@ -1,0 +1,34 @@
+{
+  "name": "yorha-hacking",
+  "version": "1.0.0",
+  "description": "A game client",
+  "main": "index.js",
+  "scripts": {
+    "build": "webpack",
+    "start": "webpack-dev-server --port 8999"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/o0olele/YoRHa-Hacking.git"
+  },
+  "author": "o0olele",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/o0olele/YoRHa-Hacking/issues"
+  },
+  "homepage": "https://github.com/o0olele/YoRHa-Hacking#readme",
+  "devDependencies": {
+    "@babylonjs/core": "^4.1.0",
+    "@babylonjs/inspector": "^4.1.0",
+    "clean-webpack-plugin": "^3.0.0",
+    "html-webpack-plugin": "^4.3.0",
+    "ts-loader": "^8.0.2",
+    "typescript": "^4.0.2",
+    "webpack": "^4.44.1",
+    "webpack-cli": "^3.3.12",
+    "webpack-dev-server": "^3.11.0"
+  },
+  "dependencies": {
+    "axios": "^0.20.0"
+  }
+}

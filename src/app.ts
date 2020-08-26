@@ -44,6 +44,7 @@ class App {
 
         // init web
         this._web = new Web();
+        this._web.HttpGetID();
 
         // hide/show the Inspector
         window.addEventListener("keydown", (ev) => {
@@ -193,7 +194,6 @@ class App {
 
     private async _goToCutScene(): Promise<void> {
         this._engine.displayLoadingUI();
-        await this._web.InitWS();
 
         //--SETUP SCENE--
         //dont detect any inputs from this ui while the game is loading
@@ -219,6 +219,7 @@ class App {
         cutScene.addControl(next);
 
         next.onPointerUpObservable.add(() => {
+            this._web.HttpGetRoom();
             this._goToGame();
         })
 
@@ -308,6 +309,8 @@ class App {
 
         this._eMgr = new EnemyMgr(this.assets, this._scene, shadowGenerator);
 
+        this._web.UpdateP(this._eMgr, this._player);
+
         scene.registerBeforeRender(()=>{
             this._ui.UpdateLeftTime(this._web.GetLeftTime());
         });
@@ -329,9 +332,6 @@ class App {
 
         //primitive character and setting
         await this._initializeGameAsync(scene);
-
-        // init manager of player
-        this._web.UpdateP(this._eMgr, this._player);
 
         //--WHEN SCENE FINISHED LOADING--
         await scene.whenReadyAsync();

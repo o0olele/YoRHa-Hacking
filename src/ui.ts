@@ -5,8 +5,9 @@ export class Hud {
     private _scene: Scene;
 
     //Game Timer
-    public time: number = 999; //keep track to signal end game REAL TIME
+    public time: number = 999; 
     public lastTime: number = 999;
+    public clientTime: number = 999;
     private _playerUI: AdvancedDynamicTexture;
     private _leftText!: Button;
 
@@ -43,7 +44,6 @@ export class Hud {
 
 
         playerUI.addControl(leftBtn);
-        //playerUI.addControl(leftText);
         playerUI.addControl(loseBtn);
 
 

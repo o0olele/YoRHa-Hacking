@@ -8,6 +8,7 @@ export class Player extends TransformNode {
 
     //Player
     public mesh: Mesh; //outer collisionbox of player
+    public hpMesh!: Mesh;
     private _direct!: number;
     private _pos!: Vector3;
     private _shotDirect!: number;
@@ -41,6 +42,12 @@ export class Player extends TransformNode {
 
         this.mesh = assets.mesh;
         this.mesh.parent = this;
+
+        this.hpMesh = Mesh.CreateBox("hpbar", 1);
+        this.hpMesh.scaling = new Vector3(1.5, 0.1, 0.1);
+        this.hpMesh.position.y += 0.5;
+        this.hpMesh.position.z -= 2;
+        this.hpMesh.parent = this.mesh;
 
         shadowGenerator.addShadowCaster(assets.mesh); //the player mesh will cast shadows
 
@@ -146,6 +153,8 @@ export class Player extends TransformNode {
             Scalar.Lerp(this.mesh.position.z, this._pos.z, 0.1),
         );
 
+        this.hpMesh.scaling.x = 1.5 * this._hp / 100;
+
         if (this._isGrounded()) {
             this._gravity.y = 0;
             this._grounded = true;
@@ -226,6 +235,7 @@ export class EnemyMgr {
             this.eMap.get(e)?.Update(x, y, hp, direct);
         } else {
             let temp = new Enemy(e, this.assets, this.scene, this.show);
+            temp.UpdateMesh(x, y);
             this.eMap.set(e, temp);
         }
     }
@@ -309,6 +319,7 @@ export class Enemy extends TransformNode {
 
     public pid!: number;
     public mesh: Mesh; //outer collisionbox of player
+    public hpMesh: Mesh;
     public pos: Vector3 = new Vector3(0, 0, 0);
     public hp!: number;
     public direct!: number;
@@ -321,6 +332,12 @@ export class Enemy extends TransformNode {
 
         this.mesh = assets.mesh!.clone();
         this.mesh.parent = this;
+
+        this.hpMesh = Mesh.CreateBox("hpbar", 1);
+        this.hpMesh.scaling = new Vector3(1.5, 0.1, 0.1);
+        this.hpMesh.position.y += 0.5;
+        this.hpMesh.position.z -= 2;
+        this.hpMesh.parent = this.mesh;
 
         shadowGenerator.addShadowCaster(assets.mesh); //the player mesh will cast shadows
 
@@ -339,6 +356,8 @@ export class Enemy extends TransformNode {
         this.hp = hp;
         this.direct = direct;
 
+        this.hpMesh.scaling.x = 1.5 * this.hp / 100;
+
         this.mesh.lookAt(new Vector3(
             this.pos.x + 10 * Math.sin(this.direct * Math.PI / 180),
             0,
@@ -346,4 +365,11 @@ export class Enemy extends TransformNode {
         ), Math.PI, Math.PI, Math.PI);
 
     }
+
+    public UpdateMesh(x: number, z: number) {
+        this.mesh.position.x = x;
+        this.mesh.position.z = z;
+    }
+
+
 }
