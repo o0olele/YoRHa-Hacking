@@ -1,11 +1,14 @@
 import { EnemyMgr, Player } from "./playerController";
 import * as axios from "axios"
+import { Environment } from "./environment";
+import { Vector3 } from "@babylonjs/core";
 
 declare var TokenMsg: (arg0: number, arg1: string) => string | ArrayBuffer | SharedArrayBuffer | Blob | ArrayBufferView;
 declare var MoveMsg: (arg0: number) => string | ArrayBuffer | SharedArrayBuffer | Blob | ArrayBufferView;
 declare var ShotMsg: (arg0: number) => string | ArrayBuffer | SharedArrayBuffer | Blob | ArrayBufferView;
 declare var HeartMsg: () => string | ArrayBuffer | SharedArrayBuffer | Blob | ArrayBufferView;
 declare var DirectMsg: (arg0: number) => string | ArrayBuffer | SharedArrayBuffer | Blob | ArrayBufferView;
+declare var RelifeMsg: () => string | ArrayBuffer | SharedArrayBuffer | Blob | ArrayBufferView;
 declare var blob2string: (arg0: any) => string;
 
 enum GameState { Match = 0, Start = 1, End = 2 }
@@ -13,7 +16,7 @@ enum GameState { Match = 0, Start = 1, End = 2 }
 export class Web {
     private _http: string = "http://192.168.96.165";
     private _ip: string = "192.168.96.165:9001";
-    private _ws!: WebSocket;
+    private _ws!: WebSocket | null;
 
     // Player - related
     private _id!: number;
@@ -23,10 +26,13 @@ export class Web {
     // Game - related
     private _pmap!: EnemyMgr;
     private _me!: Player;
+    private _env!: Environment;
+
     private _timerCmd: NodeJS.Timeout | null = null;
     private _timerHeart: NodeJS.Timeout | null = null;
     private _gameStat: GameState = GameState.Match;
     private _gameLeftTime: number = 999;
+    private _die: boolean = false;
 
     constructor() {
     }
@@ -39,9 +45,11 @@ export class Web {
         return this._gameStat == GameState.End;
     }
 
-    public UpdateP(p: EnemyMgr, m: Player) {
+    public UpdateP(p: EnemyMgr, m: Player, e: Environment) {
         this._me = m;
         this._pmap = p;
+        this._env = e;
+
         this._timerCmd = setInterval((me) => {
             if (typeof (me) == 'undefined')
                 return;
@@ -71,7 +79,6 @@ export class Web {
         this._ws.onmessage = async (evt) => {
             let received_msg = evt.data.slice(4);
             var data = JSON.parse(blob2string(received_msg));
-            console.log(data);
 
             //--------------------------------------------------------------------------------------------
             // master version
@@ -131,10 +138,10 @@ export class Web {
                     var tt = data.Move[i];
 
                     if (this._id == tt.Userid) {
-                        this._me.mUpdate(tt.Pos.X, tt.Pos.Y, tt.Hp);
+                        this._me.mUpdate(tt.Pos.X, tt.Pos.Y, tt.HP);
                         continue;
                     }
-                    this._pmap.Add(tt.Userid, tt.Pos.X, tt.Pos.Y, tt.Hp, tt.Pos.Ag);
+                    this._pmap.Add(tt.Userid, tt.Pos.X, tt.Pos.Y, tt.HP, tt.Pos.Ag);
                 }
             }
 
@@ -154,12 +161,11 @@ export class Web {
                     var tt = data.Add[i];
 
                     if (this._id == tt.Userid) {
-                        this._me.mUpdate(tt.Pos.X, tt.Pos.Y, tt.Hp);
+                        this._me.mUpdate(tt.Pos.X, tt.Pos.Y, tt.HP);
                         continue;
                     }
-                    this._pmap.Add(tt.Userid, tt.Pos.X, tt.Pos.Y, tt.Hp, tt.Pos.Ag);
+                    this._pmap.Add(tt.Userid, tt.Pos.X, tt.Pos.Y, tt.HP, tt.Pos.Ag);
                 }
-                console.log(this._id, this._pmap);
             }
 
             if (typeof (data.Bullets) != 'undefined') {
@@ -193,6 +199,29 @@ export class Web {
             if (typeof (data.Time) != 'undefined') {
                 this._gameLeftTime = data.Time;
             }
+
+            if (typeof (data.Die) != 'undefined') {
+                this._die = true;
+            }
+
+            if (typeof (data.Obstacles) != 'undefined') {
+                
+                if (data.Obstacles.Add != null) {
+                    console.log(data.Obstacles);
+                    for (var i = 0; i < data.Obstacles.Add.length; i++) {
+                        var t = data.Obstacles.Add[i];
+                        this._pmap.AddObstacle(t.Id, t.Pos.X, t.Pos.Y, t.Height);
+                    }
+                }
+
+                if (data.Obstacles.ReMove != null) {
+                    for (var i = 0; i < data.Obstacles.ReMove.length; i++) {
+                        this._pmap.DelObstacle(data.Obstacles.ReMove[i]);
+                    }
+                }
+
+
+            }
         };
 
         this._ws.onclose = () => {
@@ -203,35 +232,53 @@ export class Web {
     }
 
     public SendTokenMsg(id: number, token: string) {
-        this._ws.send(TokenMsg(id, token));
+        this._ws!.send(TokenMsg(id, token));
     }
 
     public SendMoveMsg(direct: number) {
-        if (this._ws.OPEN)
-            this._ws.send(MoveMsg(direct));
+        if (this._ws!.OPEN)
+            this._ws!.send(MoveMsg(direct));
     }
 
     public SendHeartMsg() {
-        if (this._ws.OPEN)
-            this._ws.send(HeartMsg());
+        if (this._ws!.OPEN)
+            this._ws!.send(HeartMsg());
     }
 
     public SendShotMsg(direct: number) {
-        if (this._ws.OPEN)
-            this._ws.send(ShotMsg(direct));
+        if (this._ws!.OPEN)
+            this._ws!.send(ShotMsg(direct));
     }
 
     public SendDirectMsg(direct: number) {
-        if (this._ws.OPEN)
-            this._ws.send(DirectMsg(direct));
+        if (this._ws!.OPEN)
+            this._ws!.send(DirectMsg(direct));
+    }
+
+    public SendRelifeMsg() {
+        if (this._ws!.OPEN)
+            this._ws!.send(RelifeMsg());
     }
 
     public CloseWS() {
-        this._ws.close();
+        this._ws!.close();
+        this._ws = null;
     }
 
     public GetLeftTime(): number {
         return this._gameLeftTime;
+    }
+
+    public GetDie(): boolean {
+        return this._die;
+    }
+
+    public ResetDie() {
+        this._die = false;
+    }
+
+    public ResetGameState() {
+        this._gameStat = GameState.Match;
     }
 
     // /getid?DeviceId=xxx&Ip=xxx

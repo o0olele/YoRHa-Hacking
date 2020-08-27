@@ -1,4 +1,4 @@
-import { TransformNode, ShadowGenerator, Scene, Mesh, UniversalCamera, ArcRotateCamera, Vector3, Quaternion, Ray, Scalar, StandardMaterial, Color3, MeshBuilder, Matrix, PointLight } from "@babylonjs/core";
+import { TransformNode, ShadowGenerator, Scene, Mesh, UniversalCamera, ArcRotateCamera, Vector3, Quaternion, Ray, Scalar, StandardMaterial, Color3, MeshBuilder, Matrix, PointLight, PhysicsImpostor, CannonJSPlugin } from "@babylonjs/core";
 import { PlayerInput } from "./inputController";
 
 export class Player extends TransformNode {
@@ -8,7 +8,6 @@ export class Player extends TransformNode {
 
     //Player
     public mesh: Mesh; //outer collisionbox of player
-    public hpMesh!: Mesh;
     private _direct!: number;
     private _pos!: Vector3;
     private _shotDirect!: number;
@@ -35,21 +34,13 @@ export class Player extends TransformNode {
     private _lastGroundPos: Vector3 = Vector3.Zero(); // keep track of the last grounded position
     private _grounded!: boolean;
 
-    constructor(assets: { mesh: any; }, scene: Scene, shadowGenerator: ShadowGenerator, input?: PlayerInput) {
+    constructor(assets: { mesh: any; }, scene: Scene, input?: PlayerInput) {
         super("player", scene);
         this.scene = scene;
         this._setupPlayerCamera();
 
         this.mesh = assets.mesh;
         this.mesh.parent = this;
-
-        this.hpMesh = Mesh.CreateBox("hpbar", 1);
-        this.hpMesh.scaling = new Vector3(1.5, 0.1, 0.1);
-        this.hpMesh.position.y += 0.5;
-        this.hpMesh.position.z -= 2;
-        this.hpMesh.parent = this.mesh;
-
-        shadowGenerator.addShadowCaster(assets.mesh); //the player mesh will cast shadows
 
         this._input = input;
         this._pos = this.mesh.position;
@@ -153,8 +144,6 @@ export class Player extends TransformNode {
             Scalar.Lerp(this.mesh.position.z, this._pos.z, 0.1),
         );
 
-        this.hpMesh.scaling.x = 1.5 * this._hp / 100;
-
         if (this._isGrounded()) {
             this._gravity.y = 0;
             this._grounded = true;
@@ -218,23 +207,23 @@ export class Player extends TransformNode {
 export class EnemyMgr {
     public eMap!: Map<number, Enemy>;
     public bMap!: Map<number, Bullet>;
+    public oMap!: Map<number, Obstacle>;
     public assets: { mesh: any; };
     public scene: Scene;
-    public show: ShadowGenerator;
 
-    constructor(assets: { mesh: any; }, sc: Scene, shadowGenerator: ShadowGenerator) {
+    constructor(assets: { mesh: any; }, sc: Scene) {
         this.eMap = new Map<number, Enemy>();
-        this.bMap = new Map<number, Bullet>()
+        this.bMap = new Map<number, Bullet>();
+        this.oMap = new Map<number, Obstacle>()
         this.assets = assets;
         this.scene = sc;
-        this.show = shadowGenerator;
     }
 
     public Add(e: number, x: number, y: number, hp: number, direct: number) {
         if (this.eMap.has(e)) {
             this.eMap.get(e)?.Update(x, y, hp, direct);
         } else {
-            let temp = new Enemy(e, this.assets, this.scene, this.show);
+            let temp = new Enemy(e, this.assets, this.scene);
             temp.UpdateMesh(x, y);
             this.eMap.set(e, temp);
         }
@@ -251,7 +240,7 @@ export class EnemyMgr {
         if (this.bMap.has(e)) {
             this.bMap.get(e)?.Update(x, y);
         } else {
-            let temp = new Bullet(e, this.scene, this.show);
+            let temp = new Bullet(e, this.scene);
             this.bMap.set(e, temp);
         }
     }
@@ -275,6 +264,49 @@ export class EnemyMgr {
                 this.DelBullet(r.value);
         }
     }
+
+    public AddObstacle(id: number, x: number, y: number, size: number) {
+        if (this.oMap.has(id))
+            return;
+
+        var temp = new Obstacle(id, size, new Vector3(x, 1, y), this.scene);
+        this.oMap.set(id, temp);
+    }
+
+    public DelObstacle(id: number) {
+        if (this.oMap.has(id)) {
+            this.oMap.get(id)?.Destroy();
+            this.oMap.delete(id);
+        }
+    }
+}
+
+export class Obstacle extends TransformNode {
+    public oid: number;
+    public scene: Scene;
+    public mesh!: Mesh;
+
+    constructor(id: number, size: number, pos: Vector3, scene: Scene) {
+        super("obstacle" + id, scene);
+
+        this.oid = id;
+        this.scene = scene;
+
+        var gravityVector = new Vector3(0, -9.81, 0);
+        var physicsPlugin = new CannonJSPlugin();
+        this.scene.enablePhysics(gravityVector, physicsPlugin);
+
+        this.mesh = MeshBuilder.CreateBox("oo" + id, { size: size });
+        this.mesh.position = pos;
+        this.mesh.physicsImpostor = new PhysicsImpostor(this.mesh, PhysicsImpostor.BoxImpostor, { mass: 1 }, scene);
+
+        this.mesh.parent = this;
+    }
+
+    public Destroy() {
+        this.scene.removeMesh(this.mesh, true);
+        this.mesh.dispose();
+    }
 }
 
 export class Bullet extends TransformNode {
@@ -283,7 +315,7 @@ export class Bullet extends TransformNode {
     public mesh!: Mesh;
     public pos!: Vector3;
 
-    constructor(id: number, scene: Scene, shadowGenerator: ShadowGenerator) {
+    constructor(id: number, scene: Scene) {
         super("bullet" + id, scene);
 
         this.bid = id;
@@ -291,8 +323,6 @@ export class Bullet extends TransformNode {
 
         this.mesh = Mesh.CreateSphere("bb" + id, 12, 0.8);
         this.mesh.parent = this;
-
-        shadowGenerator.addShadowCaster(this.mesh); //the player mesh will cast shadows
 
         this.scene.registerBeforeRender(() => {
             this.position = this.pos;
@@ -306,11 +336,12 @@ export class Bullet extends TransformNode {
         this.mesh.dispose();
     }
 
-    public Update(x: number, y: number) {
+    public Update(x: number, z: number) {
         this.mesh.isVisible = true;
-        this.pos.x = x;
+
+        this.pos.x = x;//Scalar.Lerp(this.pos.x, x, 0.5);
         this.pos.y = 0;
-        this.pos.z = y;
+        this.pos.z = z;//Scalar.Lerp(this.pos.z, z, 0.5);
     }
 }
 
@@ -319,13 +350,14 @@ export class Enemy extends TransformNode {
 
     public pid!: number;
     public mesh: Mesh; //outer collisionbox of player
-    public hpMesh: Mesh;
+    public hpMesh!: Mesh;
     public pos: Vector3 = new Vector3(0, 0, 0);
+    public hppos: Vector3 = new Vector3(0, 0, 0);
     public hp!: number;
     public direct!: number;
     public quar!: Quaternion;
 
-    constructor(id: number, assets: { mesh: any; }, scene: Scene, shadowGenerator: ShadowGenerator) {
+    constructor(id: number, assets: { mesh: any; }, scene: Scene) {
         super("player" + id, scene);
         this.pid = id;
         this.scene = scene;
@@ -333,13 +365,10 @@ export class Enemy extends TransformNode {
         this.mesh = assets.mesh!.clone();
         this.mesh.parent = this;
 
-        this.hpMesh = Mesh.CreateBox("hpbar", 1);
-        this.hpMesh.scaling = new Vector3(1.5, 0.1, 0.1);
-        this.hpMesh.position.y += 0.5;
-        this.hpMesh.position.z -= 2;
+        this.hpMesh = MeshBuilder.CreateBox("hpbar" + id, { size: 1 });
+        this.hpMesh.scaling = new Vector3(1, 0.1, 0.1);
+        this.hpMesh.position.y += 2;
         this.hpMesh.parent = this.mesh;
-
-        shadowGenerator.addShadowCaster(assets.mesh); //the player mesh will cast shadows
 
         this.pos = this.mesh.position;
     }
@@ -353,10 +382,11 @@ export class Enemy extends TransformNode {
         this.pos.x = Scalar.Lerp(this.pos.x, x, 0.2);
         this.pos.y = 0;
         this.pos.z = Scalar.Lerp(this.pos.z, z, 0.2);
+
         this.hp = hp;
         this.direct = direct;
 
-        this.hpMesh.scaling.x = 1.5 * this.hp / 100;
+        this.hpMesh.scaling.x = this.hp / 100;
 
         this.mesh.lookAt(new Vector3(
             this.pos.x + 10 * Math.sin(this.direct * Math.PI / 180),

@@ -1,7 +1,7 @@
 import "@babylonjs/core/Debug/debugLayer";
 import "@babylonjs/inspector";
 import { OBJFileLoader } from "@babylonjs/loaders/OBJ";
-import { Engine, Scene, ArcRotateCamera, Vector3, HemisphericLight, Mesh, MeshBuilder, FreeCamera, Color4, StandardMaterial, Color3, PointLight, ShadowGenerator, Quaternion, Matrix, SceneLoader, InputBlock } from "@babylonjs/core";
+import { Engine, Scene, ArcRotateCamera, Vector3, HemisphericLight, Mesh, MeshBuilder, FreeCamera, Color4, StandardMaterial, Color3, PointLight, ShadowGenerator, Quaternion, Matrix, SceneLoader, InputBlock, CannonJSPlugin } from "@babylonjs/core";
 import { AdvancedDynamicTexture, Button, Control, Image, Rectangle, InputText, TextBlock } from "@babylonjs/gui";
 import { Environment } from "./environment";
 import { Player, EnemyMgr } from "./playerController";
@@ -103,6 +103,10 @@ class App {
                     this._scene.render();
                     if (this._web.IsGameEnd())
                         this._goToLose();
+                    if (this._web.GetDie()) {
+                        this._ui.ShowYouDie();
+                        this._web.ResetDie();
+                    }
                     break;
                 case State.LOSE:
                     this._scene.render();
@@ -295,23 +299,15 @@ class App {
         //temporary light to light the entire scene
         var light0 = new HemisphericLight("HemiLight", new Vector3(0, 1, 0), scene);
 
-        const light = new PointLight("sparklight", new Vector3(0, 0, 0), scene);
-        light.diffuse = new Color3(0.08627450980392157, 0.10980392156862745, 0.15294117647058825);
-        light.intensity = 10;
-        light.radius = 0.1;
-
-        const shadowGenerator = new ShadowGenerator(1024, light);
-        shadowGenerator.darkness = 0.4;
-
         //Create the player
-        this._player = new Player(this.assets, scene, shadowGenerator, this._input);
+        this._player = new Player(this.assets, scene, this._input);
         const camera = this._player.activatePlayerCamera();
 
-        this._eMgr = new EnemyMgr(this.assets, this._scene, shadowGenerator);
+        this._eMgr = new EnemyMgr(this.assets, this._scene);
 
-        this._web.UpdateP(this._eMgr, this._player);
+        this._web.UpdateP(this._eMgr, this._player, this._environment);
 
-        scene.registerBeforeRender(()=>{
+        scene.registerBeforeRender(() => {
             this._ui.UpdateLeftTime(this._web.GetLeftTime());
         });
     }
@@ -320,11 +316,12 @@ class App {
         //--SETUP SCENE--
         this._scene.detachControl();
         let scene = this._gamescene;
-        scene.clearColor = new Color4(0.01568627450980392, 0.01568627450980392, 0.20392156862745098); // a color that fit the overall color scheme better
+        scene.clearColor = new Color4(64 / 255, 62 / 255, 51 / 255, 1); // a color that fit the overall color scheme better
 
         //--GUI--
-        const ui = new Hud(scene);
+        const ui = new Hud(scene, this._web);
         this._ui = ui;
+
         scene.detachControl();
 
         //--INPUT--
@@ -384,6 +381,7 @@ class App {
         this._scene.dispose();
         this._scene = scene;
         this._state = State.LOSE;
+        this._web.ResetGameState();
     }
 
 }

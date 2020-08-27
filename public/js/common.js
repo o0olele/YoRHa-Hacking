@@ -70,6 +70,14 @@ function DirectMsg(direct) {
     return concatenate(Uint8Array, h, head, angle);
 }
 
+function RelifeMsg() {
+    var h = concatenate(Uint8Array, getUint8Bytes(0), getUint8Bytes(0), getUint8Bytes(1), getUint8Bytes(0));
+    h.reverse()
+    var head = concatenate(Uint8Array, getUint16Bytes(6), getUint16Bytes(8));
+    head.reverse();
+    return concatenate(Uint8Array, h, head);
+}
+
 function concatenate(resultConstructor, ...arrays) {
     let totalLength = 0;
     for (let arr of arrays) {
