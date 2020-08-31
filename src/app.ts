@@ -2,7 +2,7 @@ import "@babylonjs/core/Debug/debugLayer";
 import "@babylonjs/inspector";
 import { OBJFileLoader } from "@babylonjs/loaders/OBJ";
 import { Engine, Scene, ArcRotateCamera, Vector3, HemisphericLight, Mesh, MeshBuilder, FreeCamera, Color4, StandardMaterial, Color3, PointLight, ShadowGenerator, Quaternion, Matrix, SceneLoader, InputBlock, CannonJSPlugin } from "@babylonjs/core";
-import { AdvancedDynamicTexture, Button, Control, Image, Rectangle, InputText, TextBlock } from "@babylonjs/gui";
+import { AdvancedDynamicTexture, Button, Control, Image, Rectangle, InputText, TextBlock, StackPanel } from "@babylonjs/gui";
 import { Environment } from "./environment";
 import { Player, EnemyMgr } from "./playerController";
 import { PlayerInput } from "./inputController";
@@ -187,6 +187,66 @@ class App {
             scene.detachControl(); //observables disabled
         });
 
+        let isMobile = false;
+        //--MOBILE--
+        if (/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)) {
+            isMobile = true;
+            //popup for mobile to rotate screen
+            const rect1 = new Rectangle();
+            rect1.height = 1;
+            rect1.width = 1;
+            rect1.verticalAlignment = Control.HORIZONTAL_ALIGNMENT_CENTER;
+            rect1.horizontalAlignment = Control.VERTICAL_ALIGNMENT_CENTER;
+            rect1.background = "white";
+            guiMenu.addControl(rect1);
+
+            const rect = new Rectangle();
+            rect.height = 1;
+            rect.width = 0.8;
+            rect.top = "-100px";
+            rect.verticalAlignment = Control.HORIZONTAL_ALIGNMENT_CENTER;
+            rect.horizontalAlignment = Control.VERTICAL_ALIGNMENT_CENTER;
+            rect.color = "whites";
+            guiMenu.addControl(rect);
+
+            const stackPanel = new StackPanel();
+            stackPanel.verticalAlignment = Control.VERTICAL_ALIGNMENT_BOTTOM;
+            rect.addControl(stackPanel);
+
+            //image
+            const image = new Image("rotate", "./images/rotate.png")
+            image.autoScale = false;
+            image.width = 0.6;
+            image.height = 0.2;
+            image.verticalAlignment = Control.VERTICAL_ALIGNMENT_CENTER;
+            image.rotation = Math.PI / 2;
+            rect.addControl(image);
+
+            //alert message
+            const alert = new TextBlock("alert", "For the best experience, please rotate your device");
+            alert.fontSize = "16px";
+            alert.color = "black";
+            alert.resizeToFit = true;
+            alert.textWrapping = true;
+            stackPanel.addControl(alert);
+
+            onorientationchange = () => {
+                switch (window.orientation) {
+                    case -90:
+                    case 90:
+                        guiMenu.removeControl(rect);
+                        guiMenu.removeControl(rect1);
+
+                        startBtn.isHitTestVisible = true;
+                        this._engine.enterFullscreen(true);
+                        break;
+                    default:
+                        guiMenu.addControl(rect);
+                        guiMenu.addControl(rect1);
+                };
+            }
+        }
+
         //--SCENE FINISHED LOADING--
         await scene.whenReadyAsync();
         this._engine.hideLoadingUI();
@@ -303,7 +363,7 @@ class App {
         this._player = new Player(this.assets, scene, this._input);
         const camera = this._player.activatePlayerCamera();
 
-        this._eMgr = new EnemyMgr(this.assets, this._scene);
+        this._eMgr = new EnemyMgr(this.assets, scene);
 
         this._web.UpdateP(this._eMgr, this._player, this._environment);
 
@@ -325,7 +385,7 @@ class App {
         scene.detachControl();
 
         //--INPUT--
-        this._input = new PlayerInput(scene); //detect keyboard/mobile inputs
+        this._input = new PlayerInput(scene, this._ui); //detect keyboard/mobile inputs
 
         //primitive character and setting
         await this._initializeGameAsync(scene);

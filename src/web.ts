@@ -16,6 +16,8 @@ enum GameState { Match = 0, Start = 1, End = 2 }
 export class Web {
     private _http: string = "http://192.168.96.165";
     private _ip: string = "192.168.96.165:9001";
+    // private _http: string = "http://122.51.128.173:8082";
+    // private _ip: string = "122.51.128.173:9001";
     private _ws!: WebSocket | null;
 
     // Player - related
@@ -131,6 +133,7 @@ export class Web {
             //--------------------------------------------------------------------------------------------
             // rebuild version
             if (typeof (data.Move) != 'undefined') {
+                
                 if (typeof (this._me) == 'undefined' || typeof (this._pmap) == 'undefined')
                     return;
 
@@ -205,12 +208,11 @@ export class Web {
             }
 
             if (typeof (data.Obstacles) != 'undefined') {
-                
                 if (data.Obstacles.Add != null) {
                     console.log(data.Obstacles);
                     for (var i = 0; i < data.Obstacles.Add.length; i++) {
                         var t = data.Obstacles.Add[i];
-                        this._pmap.AddObstacle(t.Id, t.Pos.X, t.Pos.Y, t.Height);
+                        this._pmap.AddObstacle(t.Id, t.Pos.X, t.Pos.Y, t.Width);
                     }
                 }
 

@@ -91,18 +91,28 @@ export class Player extends TransformNode {
         this._direct = this._caculateAngle(-this._h, -this._v);
 
         //Rotations
-        let temp = new Vector3();
-        temp.x = 2 * this.mesh!.position!.x - this._input!.groundPos!.x;
-        temp.z = 2 * this.mesh!.position!.z - this._input!.groundPos!.z;
-        temp.y = this.mesh!.position!.y;
-        this.mesh.lookAt(new Vector3(
-            Scalar.Lerp(this._lastLookat.x, temp.x, 0.1),
-            temp.y,
-            Scalar.Lerp(this._lastLookat.z, temp.z, 0.1)
-        ), Math.PI);
-        this._lastLookat = temp;
+        if (this._input?._ui.rightPuck_isDown) {
+            this.mesh.lookAt(new Vector3(
+                this.mesh!.position!.x+this._input.groundPos.x,
+                0,
+                this.mesh!.position!.z+this._input.groundPos.z
+            ), Math.PI);
 
-        this._shotDirect = this._caculateAngle(this._input!.groundPos!.x - this.mesh!.position!.x, this._input!.groundPos!.z - this.mesh!.position!.z);
+            this._shotDirect = this._caculateAngle(-this._input.groundPos.x, -this._input.groundPos.z);
+        } else {
+            let temp = new Vector3();
+            temp.x = 2 * this.mesh!.position!.x - this._input!.groundPos!.x;
+            temp.z = 2 * this.mesh!.position!.z - this._input!.groundPos!.z;
+            temp.y = this.mesh!.position!.y;
+            this.mesh.lookAt(new Vector3(
+                Scalar.Lerp(this._lastLookat.x, temp.x, 0.1),
+                temp.y,
+                Scalar.Lerp(this._lastLookat.z, temp.z, 0.1)
+            ), Math.PI);
+            this._lastLookat = temp;
+
+            this._shotDirect = this._caculateAngle(this._input!.groundPos!.x - this.mesh!.position!.x, this._input!.groundPos!.z - this.mesh!.position!.z);
+        }
     }
 
     private _floorRaycast(offsetx: number, offsetz: number, raycastlen: number): Vector3 {
@@ -240,7 +250,7 @@ export class EnemyMgr {
         if (this.bMap.has(e)) {
             this.bMap.get(e)?.Update(x, y);
         } else {
-            let temp = new Bullet(e, this.scene);
+            let temp = new Bullet(e, x, y, this.scene);
             this.bMap.set(e, temp);
         }
     }
@@ -313,19 +323,24 @@ export class Bullet extends TransformNode {
     public scene: Scene;
     public bid!: number;
     public mesh!: Mesh;
-    public pos!: Vector3;
+    public pos: Vector3 = Vector3.Zero();
 
-    constructor(id: number, scene: Scene) {
+    constructor(id: number, x: number, y: number, scene: Scene) {
         super("bullet" + id, scene);
 
         this.bid = id;
         this.scene = scene;
 
         this.mesh = Mesh.CreateSphere("bb" + id, 12, 0.8);
+        this.mesh.position = new Vector3(x,0,y);
         this.mesh.parent = this;
 
         this.scene.registerBeforeRender(() => {
-            this.position = this.pos;
+            this.mesh.position = new Vector3(
+                Scalar.Lerp(this.mesh.position.x, this.pos.x, 0.2),
+                0,//this.mesh.position.y,
+                Scalar.Lerp(this.mesh.position.z, this.pos.z, 0.2),
+            );
         });
         this.mesh.isVisible = false;
         this.pos = this.mesh.position;
@@ -339,9 +354,11 @@ export class Bullet extends TransformNode {
     public Update(x: number, z: number) {
         this.mesh.isVisible = true;
 
-        this.pos.x = x;//Scalar.Lerp(this.pos.x, x, 0.5);
+        this.pos.x = x;//Scalar.Lerp(this.lpos.x, x, 0.5);
         this.pos.y = 0;
-        this.pos.z = z;//Scalar.Lerp(this.pos.z, z, 0.5);
+        this.pos.z = z;//Scalar.Lerp(this.lpos.z, z, 0.5);
+
+        console.log(this.pos, this.mesh.position);
     }
 }
 
@@ -370,6 +387,14 @@ export class Enemy extends TransformNode {
         this.hpMesh.position.y += 2;
         this.hpMesh.parent = this.mesh;
 
+        this.scene.registerBeforeRender(() => {
+            this.mesh.position = new Vector3(
+                Scalar.Lerp(this.mesh.position.x, this.pos.x, 0.2),
+                0,//this.mesh.position.y,
+                Scalar.Lerp(this.mesh.position.z, this.pos.z, 0.2),
+            );
+        });
+
         this.pos = this.mesh.position;
     }
 
@@ -379,9 +404,9 @@ export class Enemy extends TransformNode {
     }
 
     public Update(x: number, z: number, hp: number, direct: number) {
-        this.pos.x = Scalar.Lerp(this.pos.x, x, 0.2);
+        this.pos.x = x;
         this.pos.y = 0;
-        this.pos.z = Scalar.Lerp(this.pos.z, z, 0.2);
+        this.pos.z = z;
 
         this.hp = hp;
         this.direct = direct;
@@ -392,7 +417,7 @@ export class Enemy extends TransformNode {
             this.pos.x + 10 * Math.sin(this.direct * Math.PI / 180),
             0,
             this.pos.z + 10 * Math.cos(this.direct * Math.PI / 180)
-        ), Math.PI, Math.PI, Math.PI);
+        ));
 
     }
 
