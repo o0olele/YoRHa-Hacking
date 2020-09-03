@@ -33,30 +33,30 @@ export class PlayerInput {
             this.inputMap[evt.sourceEvent.key] = evt.sourceEvent.type == "keydown";
         }));
 
-        scene.onPointerObservable.add((eventData) => {
+        // scene.onPointerObservable.add((eventData) => {
 
-        }, PointerEventTypes.POINTERMOVE);
-        scene.onPointerObservable.add((pointerInfo) => {
-            switch (pointerInfo.type) {
-                case PointerEventTypes.POINTERDOWN:
-                    this.isShot = true;
-                    break;
-                case PointerEventTypes.POINTERUP:
-                    this.isShot = false;
-                    break;
-                case PointerEventTypes.POINTERMOVE:
-                    this.groundLastPos = this.groundPos;
-                    this.groundPos = this._getGroundPosition(scene);
-                    break;
-            }
-        });
+        // }, PointerEventTypes.POINTERMOVE);
+        
 
         scene.onBeforeRenderObservable.add(() => {
             this._updateFromKeyboard();
         });
 
-        if (this._ui.isMobile) {
-            
+        if (!this._ui.isMobile) {
+            scene.onPointerObservable.add((pointerInfo) => {
+                switch (pointerInfo.type) {
+                    case PointerEventTypes.POINTERDOWN:
+                        this.isShot = true;
+                        break;
+                    case PointerEventTypes.POINTERUP:
+                        this.isShot = false;
+                        break;
+                    case PointerEventTypes.POINTERMOVE:
+                        this.groundLastPos = this.groundPos;
+                        this.groundPos = this._getGroundPosition(scene);
+                        break;
+                }
+            });
             
         }
     }
@@ -109,12 +109,15 @@ export class PlayerInput {
             this.horizontalAxis = 0;
         }
 
-        if (this._ui.rightPuck_isDown) {
-            this.isShot = true;
-            this.groundPos = new Vector3(-this._ui.xAddRot, 0, this._ui.yAddRot);
-        } else {
-            this.isShot = false;
+        if (this._ui.isMobile) {
+            if (this._ui.rightPuck_isDown) {
+                this.isShot = true;
+                this.groundPos = new Vector3(-this._ui.xAddRot, 0, this._ui.yAddRot);
+            } else {
+                this.isShot = false;
+            }
         }
+        
     }
 
 }
